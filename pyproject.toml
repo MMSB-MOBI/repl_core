@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "repl_core"
+version = "0.1.0"
+description = ""
+authors = ["glaunay <pitooon@gmail.com>"]
+license = "GPL"
+
+[tool.poetry.dependencies]
+python = "^3.7"
+prompt-toolkit = "^3.0.28"
+decorator = "^5.1.1"
+fastapi = "^0.74.1"
+uvicorn = "^0.17.5"
+requests = "^2.27.1"
+repl_core = { path = "./", develop=true }
+[tool.poetry.dev-dependencies]
+pytest = "^7.0.1"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
