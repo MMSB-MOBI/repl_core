@@ -12,4 +12,11 @@ def check_conn():
 @app.get("/items/{item_id}")
 def read_item(item_id: int, q: Optional[str] = None):
     return {"item_id": item_id, "q": q}
-    
+
+print("GO?")
+
+@app.post("/put_stuff")
+def read_item(item_id: int, q: Optional[str] = None):
+    return {"item_id": item_id, "q": q}
+
+print("GO?")

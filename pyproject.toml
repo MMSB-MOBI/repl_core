@@ -6,7 +6,7 @@ authors = ["glaunay <pitooon@gmail.com>"]
 license = "GPL"
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = "^3.8"
 prompt-toolkit = "^3.0.28"
 decorator = "^5.1.1"
 fastapi = "^0.74.1"

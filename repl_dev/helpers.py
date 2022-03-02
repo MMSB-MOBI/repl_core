@@ -1,42 +1,41 @@
+from inspect import signature
 from prompt_toolkit import print_formatted_text, HTML
 from prompt_toolkit.completion import NestedCompleter
 from prompt_toolkit.auto_suggest import AutoSuggest, Suggestion
-from models import CommandModel
-
+from .models import CommandModel
+from typing import Union
 import re
-""" WHAT IS A SIGNATURE :
-SMTG TAHT COMPLIES TO THAT ?
-  'exit'    :  {
-        "_target"    : _exit,
-        "paramTypes" : None,
-        "help" : f"Close the interface\nUsage: exit"
-    }
 
-    AKA 
-    class CommandModel(BaseModel):
-    _target: Callable
-    paramTypes: Union[List,None]
-    runningParams : Boolean
-    help: str
-    SO IT HAS TO BE BUILDT IN THE @app.viewer context
-"""
-
-class CommandModelManager():
+class CommandManager():
     def __init__(self):
         self._command_map = {}
-
+        self._signatures = {
+            'help' : set()
+        }
+    def __iter__(self):
+        for t in self._command_map.items():
+            yield t
+   
+    def __getitem__(self, cmd)->CommandModel:
+        if cmd in self._command_map:
+            return self._command_map[cmd]
+        raise KeyError(f"no command {cmd}")
+        
     @property
     def completer(self):
-        return  NestedCompleter.from_nested_dict(self._command_map)
+        return  NestedCompleter.from_nested_dict(self._signatures)
+    
     @property
     def available_commands(self):
-        return self.completer.keys()
+        return self._signatures.keys()
 
-    def add(self, symbol, **kwargs):
+    def add(self, symbol, signature=None, **kwargs):
         print(f"Adding {kwargs} signature")
-        self._command_map[symbol] = CommandModel(kwargs)
+        self._command_map[symbol] = CommandModel(**kwargs)
+        self._signatures[symbol]  = signature
+        self._signatures["help"].add(symbol)
         # Should be made recursive if needed
-        
+
 #@decorator TO CONFIRM IN CONTEXT 
     def signatureCheck(self, fn):
     
@@ -60,31 +59,38 @@ class CommandModelManager():
         return customAutoSuggest(self)
 
 class customAutoSuggest(AutoSuggest):
-    def __init__(self, bound_signature_manager):
+    def __init__(self, bound_command_manager):
         super().__init__()
-        self.signature_manager = bound_signature_manager
+        self.command_manager = bound_command_manager
+
     def update(self, cmd):
         self.currentCommand = cmd
 
     def get_suggestion(self, buffer, document):
-        if len(str(document.text) == 0):
+        """ Given the current first word on prompt
+            tries to find matching arguments
+        """
+       
+        if re.match('^[\S]*$', document.text):
             return Suggestion("")
-        # Scan bound_signature_manager for longest match
-        for cmd in signature_manager.a
-        if str(document.text).startswith('connect'):
-            _ = re.findall('([\S]+)', document.text)
-            if len(_) == 1:
-                return Suggestion(" 127.0.0.1 1234")
-            if len(_) == 2:
-                return Suggestion(" 1234")
+        
+        
+        curr_prompt_elem = re.findall('([\S]+)', document.text)
+       # print(f"# {len(curr_prompt_elem)} my i suggest ?\n")
+        try: 
+            data:Union[CommandModel, None] = self.command_manager[ curr_prompt_elem[0] ] ## MM
+            if len(curr_prompt_elem) == 1: # return basic suggestion
+                _ = " ".join( data.usage.split()[1:] )
+                return Suggestion(f" {_}")
+            # We are in arguments, here we check if a path is desirable
+            curr_arg_type_num = len(curr_prompt_elem) - 2
+            if data.paramTypes:
+                if data.paramTypes[curr_arg_type_num] == "path":
+                    return Suggestion( pathSuggest(curr_prompt_elem[-1]) )
             
-        #if str(document.text).startswith('list'):
-        #    return Suggestion(" all|vector|culled|tree")
-        if str(document.text).startswith('load'):
-            _ = re.findall('([\S]+)', document.text)
-            if len(_) > 1:
-                return Suggestion( pathSuggest(_[-1]) )
-
+        except KeyError as e:
+            print(f"{curr_prompt_elem[0]} not a valid key\n")
+            return Suggestion("")
         return Suggestion("")
 
 class SignatureBaseError(Exception):
