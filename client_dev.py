@@ -10,10 +10,11 @@ app = Application(port=8000)
 # provides access to an instantiated bar object as argument in attached/view function 
 @app.viewer("/handshake",
             signature = { "pierre", "paul" },
-            help="hello pierre|paul"
+            usage="hello pierre|paul",
+            help="Say hello to p*"
             )
 def hello():
-    print("metier IN")
+    #print(f"Hello {firstname}")
     print(get_response().content)
     print("metier OUT")
 

@@ -13,6 +13,7 @@ def getPrompt():
 def run(app:Application):
 
     def digest(_input):
+        print("JE DIGERE")
         if re.match('^[\s]*$', _input) :
             #print("Empty string")
             return

@@ -70,7 +70,7 @@ class customAutoSuggest(AutoSuggest):
         """ Given the current first word on prompt
             tries to find matching arguments
         """
-       
+        print("###", document.text)
         if re.match('^[\S]*$', document.text):
             return Suggestion("")
         
