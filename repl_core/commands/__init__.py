@@ -10,6 +10,7 @@ from pydantic import BaseModel, ValidationError, validator
 from typing import Callable, Union, List
 from xmlrpc.client import Boolean
 
+import sys
 
 """
 class ExecutorBaseError(Exception):
@@ -70,7 +71,7 @@ class Executor():
         
         if not connect in self.executor:
             self._connector = Connector()
-            print("Adding base connect")
+            print("Adding base connect", file=sys.stderr)
             self.executor["connect"] = self._connector.get_specs
 
         print(self.executor)

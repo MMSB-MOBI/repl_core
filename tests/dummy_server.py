@@ -8,6 +8,10 @@ app = FastAPI()
 def check_conn():
     return "pong"
 
+@app.get("/hello")
+def check_conn():
+    return "bonjour"
+
 
 @app.get("/items/{item_id}")
 def read_item(item_id: int, q: Optional[str] = None):

@@ -4,7 +4,7 @@ from prompt_toolkit.completion import NestedCompleter
 from prompt_toolkit.auto_suggest import AutoSuggest, Suggestion
 from .models import CommandModel
 from typing import Union
-import re
+import re, sys
 
 class CommandManager():
     def __init__(self):
@@ -30,31 +30,32 @@ class CommandManager():
         return self._signatures.keys()
 
     def add(self, symbol, signature=None, **kwargs):
-        print(f"Adding {kwargs} signature")
+        print(f"Adding {kwargs} signature",file=sys.stderr)
         self._command_map[symbol] = CommandModel(**kwargs)
         self._signatures[symbol]  = signature
         self._signatures["help"].add(symbol)
         # Should be made recursive if needed
 
-#@decorator TO CONFIRM IN CONTEXT 
-    def signatureCheck(self, fn):
-    
-        def wrapped(*args, kwargs):
-            cur_sig = self.completer
-            cmd = fn.__name__
-            if not cmd in cur_sig:
-                raise SignatureCallError(cmd)
-            if cur_sig[cmd] is None:
-                return fn(*args, **kwargs)
-            availArg = set([ subCmd for subCmd in cur_sig[cmd] ])
+    def signatureCheck(self,fn, fn_symbol, *args, **kwargs):
         
-            _ = set(args) - set(availArg)
-            if not args:
-                raise SignatureEmptySubCommandError(cmd, cur_sig)        
-            if _:
-                raise SignatureWrongSubCommandError(cmd, *_)        
+        print(f"Checking signature of {fn_symbol}", file=sys.stderr)
+        cmd = fn_symbol
+        err_egg = (cmd, self._signatures)
+        #cur_sig = self.completer
+   
+        if not cmd in self.available_commands:
+            raise SignatureCallError(*err_egg)
+        if self._signatures[cmd] is None:
             return fn(*args, **kwargs)
-        return wrapped
+        availArg = set([ subCmd for subCmd in self._signatures[cmd] ])
+    
+        _ = set(args) - set(availArg)
+        if not args:
+            raise SignatureEmptySubCommandError(*err_egg)        
+        if _:
+            raise SignatureWrongSubCommandError(*err_egg, *_)        
+        return fn(*args, **kwargs)
+       
     def get_customAutoSuggest(self):
         return customAutoSuggest(self)
 
@@ -70,7 +71,7 @@ class customAutoSuggest(AutoSuggest):
         """ Given the current first word on prompt
             tries to find matching arguments
         """
-        print("###", document.text)
+        print("###", document.text, file = sys.stderr )
         if re.match('^[\S]*$', document.text):
             return Suggestion("")
         
@@ -89,37 +90,36 @@ class customAutoSuggest(AutoSuggest):
                     return Suggestion( pathSuggest(curr_prompt_elem[-1]) )
             
         except KeyError as e:
-            print(f"{curr_prompt_elem[0]} not a valid key\n")
-            return Suggestion("")
+            print(f"{curr_prompt_elem[0]} not a valid key\n", file=sys.stderr) 
+            #return Suggestion("!!!")
         return Suggestion("")
 
 class SignatureBaseError(Exception):
-    def __init__(self, cmd, cur_sig):
+    def __init__(self, cmd, signatures):
         self.cmd = cmd
-        self.availbleCmd = set(cur_sig.keys())
+        self.availbleCmd = set(signatures.keys())
         if cmd in self.availbleCmd:
-            self.subCmd = cur_sig[cmd] if type(cur_sig[cmd]) == set else set(cur_sig[cmd].keys())
+            self.subCmd = signatures[cmd] if type(signatures[cmd]) == set else set(signatures[cmd].keys())
         super().__init__()
         
 class SignatureCallError(SignatureBaseError):
-    def __init__(self, cmd):
-        super().__init__(cmd)#self.message)
+    def __init__(self, *kwargs):
+        super().__init__(*kwargs)#self.message)
     def __str__(self):
-        return f"<ansired><u>{self.cmd}</u> is not a valid command call </ansired> <ansigreen><i>{self.availbleCmd}</i><ansigreen>"
+        return f"<ansired><u>{self.cmd}</u> is not a valid command call </ansired> <ansigreen><i>{self.availbleCmd}</i></ansigreen>"
 
 class SignatureWrongSubCommandError(SignatureBaseError):
-    def __init__(self, cmd, *subCmd):
-        super().__init__(cmd)#self.message)
+    def __init__(self, cmd, signature, *subCmd):
+        super().__init__(cmd, signature)#self.message)
         self.badSubCmd = subCmd
     def __str__(self):
         return f"<ansired>{self.cmd} was called with wrong subcommand <u>{self.badSubCmd}</u> instead of <i>{self.subCmd}</i></ansired>"
 
 class SignatureEmptySubCommandError(SignatureBaseError):
-    def __init__(self, cmd):
-        super().__init__(cmd)#self.message)
+    def __init__(self, *kwargs):
+        super().__init__(*kwargs)#self.message)
     def __str__(self):
         return f"<ansired><u>{self.cmd}</u> empty argument list instead of <i>{self.subCmd}</i></ansired>"
-
 
 import glob 
 from os.path import commonprefix

@@ -5,12 +5,14 @@ import re
 from .dec_lib import Application
 from .helpers import customAutoSuggest
 
-INV_PROMPT = ">>>"
-
-def getPrompt():
-    return INV_PROMPT
 
 def run(app:Application):
+
+    def getPrompt():
+        prompt_trailer=">>>"
+        if app.is_connected:
+            return f"{app.host}:{app.port}{prompt_trailer}"
+        return f"no_host:???{prompt_trailer}"
 
     def digest(_input):
         print("JE DIGERE")
