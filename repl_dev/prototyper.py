@@ -3,7 +3,7 @@ from optparse import Option
 from pydantic import BaseModel, ValidationError, validator
 from typing import Callable, Union, List, Optional, Literal, Any
 from xmlrpc.client import Boolean
-ParamTypes = Literal["str", "number", "file", "keyword"]
+ParamTypes = Literal["string", "number", "file", "keyword"]
 
 class Parameter(BaseModel):
     name : str
@@ -23,8 +23,8 @@ class Parameter(BaseModel):
         for x in v:
             t = None
             if x.startswith('_'):
-                if not x[1:] in ["str", "number", "file"]:
-                    raise ValueError(f"{v} is not a valid type")
+                if not x[1:] in ["string", "number", "file"]:
+                    raise ValueError(f"{x[1:]} is not a valid type")
                 t =  x[1:]
             else: # plain value assumed being keyword
                 t = "keyword"
@@ -64,21 +64,55 @@ class Prototype(BaseModel):
             self.parameters = []
         self.parameters.append(p)
         
-def parse(input_string)->Prototype:
-    _ = re.search("^([\S]+)(.*)$", input_string)
-    if not _ :
-        raise ValueError(f"No command found in {input_string}")
 
-    fn_proto = Prototype(command=_[1], input_str=input_string)
-    
+def base_input_parser(istr):
+    _ = re.search("^([\S]+)(.*)$", istr)
+    if not _ :
+        raise ValueError(f"No command found in {istr}")
     if len(_.group())==2:
+        return (_[1], None)
+    p = re.findall("(\{[\w_:|]+\})", _[2])
+
+    return (_[1], p)
+        
+def parse(input_string):
+    cmd, maybe_args = base_input_parser(input_string)
+    
+    fn_proto = Prototype(command=cmd, input_str=input_string)
+    
+    if not maybe_args:
         print(f"No parameter found in input string {input_string}")
         return fn_proto
     
-    p = re.findall("(\{[\w_:|]+\})", _[2])
-    if p:
-        print(p)
-        for pf in p:
-            fn_proto.add(parameter_parser(pf))
+    for arg in maybe_args:
+        fn_proto.add(parameter_parser(arg))
         
     return fn_proto
+
+
+class PrototypeCollector():
+    def __init__(self):
+        self._prototypes = {}
+
+    def add(self, input_string)->Prototype:
+        new_proto = parse(input_string)
+        if new_proto.command in self._prototypes:
+            raise KeyError(f"prototype command {new_proto.command} alredy exists")
+        self._prototypes[new_proto.command] = new_proto
+        return new_proto
+    
+    def isa(self, cmd):
+        return str(cmd) in self._prototypes
+
+    @property
+    def commands(self):
+        return [ k for k in self._prototypes ]
+    
+    def get_cmd_param_names(self, cmd_symbol)->Optional[List[str]]:
+        if not cmd_symbol in  self._prototypes:
+            raise KeyError(f"no prototype found for command named {cmd_symbol}")
+        proto:Prototype = self._prototypes[cmd_symbol]
+        if not proto.parameters:
+            return None
+        
+        return [ p.name for p in proto.parameters ]

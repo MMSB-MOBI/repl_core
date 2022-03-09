@@ -73,17 +73,13 @@ def _connection_test(host, port, route)->Boolean:
 DEFAULT_COMMANDS = {
     'exit'    :  {
         "target"    : _exit,
-        "paramTypes" : None,
-        "help" : f"Close the interface",
-        "signature" : None,
-        "usage" : "exit"
+        "prototype" : "exit",
+        "help_msg" : "Close the interface",
     },
     'connect' : {
         "target"    : _connection_test,
-        "paramTypes" : ["string", "number", "string"],
-        "help" : f"Connect to the service",
-        "signature" : None,
-        "usage" : "connect 127.0.0.1 1234 my_route"
+        "help_msg" : "Connect to the service",
+        "prototype" : "connect {host:_string} {port:_number} {my_route:_string}"
     },
     #'help' : {
     #    "target"    : _exit,
@@ -93,6 +89,9 @@ DEFAULT_COMMANDS = {
     #    "usage" : "connect 127.0.0.1 1234"
     #}
 }
+
+ # NExt step is to add default value for autosuggest !! 
+ #"prototype" : "connect {host:_string=120.0.0.1} {port:_number=1234} {my_route:_string=/handshake}"
 
 
 class Application():
@@ -109,10 +108,11 @@ class Application():
 
         for basic_cmd, data_cmd in DEFAULT_COMMANDS.items():
             print(f"Adding to default command registry {basic_cmd}",file=sys.stderr)
-            self.command_registry.add(basic_cmd, **data_cmd)
-            self.help_registry[basic_cmd] = data_cmd["help"]
-            self.usage_registry[basic_cmd] = data_cmd["usage"]
-            self.default_map[basic_cmd] = data_cmd["target"]
+            self.command_registry.add(data_cmd["prototype"], data_cmd["target"])
+            
+            #self.help_registry[basic_cmd] = data_cmd["help"]
+            #self.usage_registry[basic_cmd] = data_cmd["usage"]
+            #self.default_map[basic_cmd] = data_cmd["target"]
 
         if auto_connect:
             self.is_connected = self.launch('connect', self.host, self.port, self.handshake_route)
@@ -127,19 +127,22 @@ class Application():
     POST?
     We must validate kwargs
     """
-    def viewer(self, ressource_path, signature = None, help=None, paramTypes=None, usage = None):
+    def viewer(self, ressource_path:str, prototype:str, help_msg:str):
         def inner_decorator(f):
-            if f.__name__ in self.viewer_map:
-                raise KeyError(f"{f.__name__} is already registred")
-            self.command_registry.add(f.__name__, target=f, 
-                                      signature=signature, 
-                                      paramTypes=paramTypes, 
-                                      help=help,
-                                      usage=usage)
-            self.help_registry[f.__name__] = help
-            self.usage_registry[f.__name__] = usage
+            self.command_registry.add(prototype)
+            self.command_registry.assert_callable(f)
 
-            print(f"viewer registred inspecti signature{fn_signature(f)}", file=sys.stderr)
+            # Not Needed TO CHEK THOUGH
+            #if f.__name__ in self.viewer_map:
+            #    raise KeyError(f"{f.__name__} is already registred")
+            self.command_registry.add(f.__name__,f)
+
+                                      
+            self.help_registry[f.__name__] = help_msg
+        
+            # Checking arguments validity
+            
+            #sprint(f"viewer registred inspecti signature{fn_signature(f)}", file=sys.stderr)
 
             def wrapped(*args, **kwargs): 
                 global response ## expression parser

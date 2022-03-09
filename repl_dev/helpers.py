@@ -1,17 +1,24 @@
 from inspect import signature
+from xmlrpc.client import Boolean
 from prompt_toolkit import print_formatted_text, HTML
 from prompt_toolkit.completion import NestedCompleter
 from prompt_toolkit.auto_suggest import AutoSuggest, Suggestion
 from .models import CommandModel
+from .prototyper import PrototypeCollector, Prototype
 from typing import Union
 import re, sys
 
+
+## AUTO SUGGEST AND VALIDATE ?
+
 class CommandManager():
     def __init__(self):
-        self._command_map = {}
-        self._signatures = {
-            'help' : set()
-        }
+        #self._command_map = {}
+        #self._signatures = {
+        #    'help' : set()
+        #}
+
+        self.prototyper = PrototypeCollector()
     def __iter__(self):
         for t in self._command_map.items():
             yield t
@@ -21,24 +28,46 @@ class CommandManager():
             return self._command_map[cmd]
         raise KeyError(f"no command {cmd}")
         
+    def assert_callable(self, f:callable):
+        if not f.__name__ in self.available_commands:
+            raise KeyError(f"{f.__name__} is not known")
+        p_names = self.prototyper.get_cmd_param_names(f.__name__)
+        c_params = list(signature(f).parameters)
+        if not c_params and not p_names:
+            return True
+        if len(p_names) != len(c_params):
+            raise TypeError(f"{f.__name__} signature ({c_params})does not match function definition{p_names}")
+        for a,b in zip(p_names, c_params):
+            if a != b:
+                raise TypeError(f"{f.__name__} signature ({c_params}) parameters names dont match function definition{p_names}")
+        
+        return True
+
     @property
-    def completer(self):
-        return  NestedCompleter.from_nested_dict(self._signatures)
+    def completer(self):# deprecated
+        return  NestedCompleter.from_nested_dict({})#self._signatures)
     
     @property
     def available_commands(self):
-        return self._signatures.keys()
+        return self.prototyper.commands
 
-    def add(self, symbol, signature=None, **kwargs):
-        print(f"Adding {kwargs} signature",file=sys.stderr)
-        self._command_map[symbol] = CommandModel(**kwargs)
-        self._signatures[symbol]  = signature
-        self._signatures["help"].add(symbol)
-        # Should be made recursive if needed
+    def add(self, proto_string , target):
+        print(f"Adding {proto_string} prototype",file=sys.stderr)
+        proto_obj:Prototype = self.prototyper.add(proto_string)
+
+
+        # Check arguments names consistency
+
+        #self._command_map[symbol] = CommandModel(**kwargs)
+        #self._signatures[symbol]  = signature
+        #self._signatures["help"].add(symbol)
+        
 
     def signatureCheck(self,fn, fn_symbol, *args, **kwargs):
         
         print(f"Checking signature of {fn_symbol}", file=sys.stderr)
+        return True
+
         cmd = fn_symbol
         err_egg = (cmd, self._signatures)
         #cur_sig = self.completer

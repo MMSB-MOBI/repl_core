@@ -2,7 +2,7 @@ from prompt_toolkit import PromptSession, print_formatted_text, HTML
 from prompt_toolkit.key_binding import KeyBindings
 import re
 
-from .dec_lib import Application
+from .application import Application
 from .helpers import customAutoSuggest
 
 
@@ -62,8 +62,8 @@ def run(app:Application):
     
     while True:
         answer = session.prompt(getPrompt(), 
-                                completer=app.completer, 
-                                auto_suggest=app.auto_suggest,
+                                #completer=app.completer, 
+                                #auto_suggest=app.auto_suggest,
         key_bindings=kb )
         digest(answer)
         #print('You said: %s' % answer)
