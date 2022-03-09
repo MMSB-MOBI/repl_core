@@ -1,0 +1,30 @@
+Adding to default command registry exit
+Adding {'target': <function _exit at 0x7fc41e8f1670>, 'paramTypes': None, 'help': 'Close the interface', 'usage': 'exit'} signature
+Adding to default command registry connect
+Adding {'target': <function _connection_test at 0x7fc41e8f1700>, 'paramTypes': ['string', 'number', 'string'], 'help': 'Connect to the service', 'usage': 'connect 127.0.0.1 1234 my_route'} signature
+launch!! connect
+Checking signature of connect
+Adding {'target': <function hello at 0x7fc41e8f9940>, 'paramTypes': None, 'help': 'Say hello to p*', 'usage': 'hello pierre|paul'} signature
+viewer registred inspecti signature(firstname)
+decorating <function hello at 0x7fc41e8f9940> with argument /handshake
+Adding {'target': <function load at 0x7fc41e934160>, 'paramTypes': ['path'], 'help': 'load a file of interest', 'usage': 'load yourFile'} signature
+viewer registred inspecti signature()
+decorating <function load at 0x7fc41e934160> with argument /put_stuff
+Traceback (most recent call last):
+  File "/Users/guillaumelaunay/work/projects/repl_core/client_dev.py", line 36, in <module>
+    prototype = "load {foo_param:cull|raw} {source:_file} {bar_threshold:_number}",
+  File "/Users/guillaumelaunay/work/projects/repl_core/repl_dev/__init__.py", line 64, in run
+    answer = session.prompt(getPrompt(), 
+  File "/Users/guillaumelaunay/Library/Caches/pypoetry/virtualenvs/repl-core-Z4D051nu-py3.9/lib/python3.9/site-packages/prompt_toolkit/shortcuts/prompt.py", line 1033, in prompt
+    return self.app.run(
+  File "/Users/guillaumelaunay/Library/Caches/pypoetry/virtualenvs/repl-core-Z4D051nu-py3.9/lib/python3.9/site-packages/prompt_toolkit/application/application.py", line 937, in run
+    return loop.run_until_complete(
+  File "/Library/Frameworks/Python.framework/Versions/3.9/lib/python3.9/asyncio/base_events.py", line 642, in run_until_complete
+    return future.result()
+  File "/Users/guillaumelaunay/Library/Caches/pypoetry/virtualenvs/repl-core-Z4D051nu-py3.9/lib/python3.9/site-packages/prompt_toolkit/application/application.py", line 856, in run_async
+    return await _run_async2()
+  File "/Users/guillaumelaunay/Library/Caches/pypoetry/virtualenvs/repl-core-Z4D051nu-py3.9/lib/python3.9/site-packages/prompt_toolkit/application/application.py", line 826, in _run_async2
+    result = await _run_async()
+  File "/Users/guillaumelaunay/Library/Caches/pypoetry/virtualenvs/repl-core-Z4D051nu-py3.9/lib/python3.9/site-packages/prompt_toolkit/application/application.py", line 754, in _run_async
+    result = await f
+EOFError
