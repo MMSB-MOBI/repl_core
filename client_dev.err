@@ -1,7 +1,0 @@
-Adding to default command registry exit
-Traceback (most recent call last):
-  File "/Users/guillaumelaunay/work/projects/repl_core/client_dev.py", line 5, in <module>
-    app = Application(port=8000, route="/handshake", auto_connect=True)
-  File "/Users/guillaumelaunay/work/projects/repl_core/repl_dev/application.py", line 111, in __init__
-    self.command_registry.add(basic_cmd, **data_cmd)
-TypeError: add() got an unexpected keyword argument 'target'

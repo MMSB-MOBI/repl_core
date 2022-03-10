@@ -1,4 +1,4 @@
-from typing import Callable, Optional
+from typing import Callable, Optional, Tuple
 from xmlrpc.client import Boolean
 from requests import get
 from prompt_toolkit import print_formatted_text, HTML
@@ -36,34 +36,27 @@ def my_decorator(arg):
         return wrapped
     return inner_decorator
 
-
-"""
-signatures = {
-    'clist': { 
-        'vector',
-        'tree',
-        'culled',
-        'all'
-    },
-    'connect' : None,    
-    'build'   : None,
-    'load'    : None,
-    'exit'    : None,
-    'delete'  : None,
-    'help'    : {'clist', 'connect',  'load', 'exit', 'delete', 'build'}
-
-}
-
-completer = NestedCompleter.from_nested_dict(signatures)
-"""
 def _exit():
-    print_formatted_text(HTML(f"\n\n<skyblue>See you space cowboy</skyblue>"))
+    s = """<skyblue>      .                            .                      .
+  .                  .             -)------+====+       .
+                           -)----====    ,'   ,'   .                 .
+              .                  `.  `.,;___,'                .
+                                   `, |____l_
+                     _,....------c==]""______ |,,,,,,.....____ _
+    .      .        "-:_____________  |____l_|]'''''''''''       .     .
+                                  ,'"",'.   `.
+         .                 -)-----====   `.   `.         See you space cowboy     
+                     .            -)-------+====+       .            .
+             .                               .</skyblue>"""
+    print_formatted_text(HTML(s))
+    #print_formatted_text(HTML(f"\n\n<skyblue></skyblue>"))
     exit(0)
 
 def _connection_test(host, port, route)->Boolean:
-    url=f"{host}:{port}/{route}"
+    url=f"{host}:{port}{route}"
     try :
-        get(f"http://{url}")
+        ans = get(f"http://{url}")
+        assert ans.status_code == 200
     except Exception as e:
         print_formatted_text(HTML(f"<ansired>Unable to establish connnection at {url}</ansired>"))
         return False
@@ -80,14 +73,7 @@ DEFAULT_COMMANDS = {
         "target"    : _connection_test,
         "help_msg" : "Connect to the service",
         "prototype" : "connect {host:_string} {port:_number} {my_route:_string}"
-    },
-    #'help' : {
-    #    "target"    : _exit,
-    #    "paramTypes" : ["string", "number"],
-    #    "help" : f"Connect to the service",
-    #    "signature" : None,
-    #    "usage" : "connect 127.0.0.1 1234"
-    #}
+    }
 }
 
  # NExt step is to add default value for autosuggest !! 
@@ -101,22 +87,23 @@ class Application():
         self.handshake_route  = route
         self.viewer_map = {}
         self.default_map = {}
-        self.help_registry = {}
-        self.usage_registry = {}
         self.command_registry = CommandManager()
+        self.help_is_ready = False
         self.is_connected = False
 
         for basic_cmd, data_cmd in DEFAULT_COMMANDS.items():
             print(f"Adding to default command registry {basic_cmd}",file=sys.stderr)
-            self.command_registry.add(data_cmd["prototype"], data_cmd["target"])
-            
-            #self.help_registry[basic_cmd] = data_cmd["help"]
-            #self.usage_registry[basic_cmd] = data_cmd["usage"]
-            #self.default_map[basic_cmd] = data_cmd["target"]
+            self.command_registry.add(data_cmd["prototype"], data_cmd["target"], data_cmd["help_msg"])
+    
+            self.default_map[basic_cmd] = data_cmd["target"]
 
         if auto_connect:
             self.is_connected = self.launch('connect', self.host, self.port, self.handshake_route)
     
+    def help(self, cmd)->Tuple[str,str]:
+        proto_input_string, proto_comments = self.command_registry.help(cmd)
+        print(f"HH {proto_input_string} // {proto_comments}", file=sys.stderr)
+        return proto_input_string, proto_comments
 
     def isa(self, cmd):
         return cmd in self.available_commands
@@ -129,16 +116,18 @@ class Application():
     """
     def viewer(self, ressource_path:str, prototype:str, help_msg:str):
         def inner_decorator(f):
-            self.command_registry.add(prototype)
+            # Register prototype
+            self.command_registry.add(prototype, f, comments=help_msg)
+            # Check decorated function matches prototype
             self.command_registry.assert_callable(f)
 
             # Not Needed TO CHEK THOUGH
             #if f.__name__ in self.viewer_map:
             #    raise KeyError(f"{f.__name__} is already registred")
-            self.command_registry.add(f.__name__,f)
+            #self.command_registry.add(f.__name__, f)
 
                                       
-            self.help_registry[f.__name__] = help_msg
+            #self.help_registry[f.__name__] = help_msg
         
             # Checking arguments validity
             
@@ -173,20 +162,23 @@ class Application():
             return self.viewer_map[sym]
         if sym in self.default_map:
             return self.default_map[sym]
+        print(f"no callable named!! {sym}", file=sys.stderr)
         return None
 
     def launch(self, cmd_name, *args, **kwargs):# ONLY VIEWER FOR NOW
+
         print(f"launch!! {cmd_name}", file=sys.stderr)
+
         try :
         #    if cmd_name in self.viewer_map:
-            _ = self.command_registry.signatureCheck(self.get_f_by_symbol(cmd_name), cmd_name, *args, **kwargs)
+            fn = self.get_f_by_symbol(cmd_name)
+            self.command_registry.signatureCheck(fn, cmd_name, *args, **kwargs)
+            _ = fn(*args, **kwargs)
         except SignatureBaseError as e:
             print(str(e), file=sys.stderr)
             print_formatted_text(HTML(str(e)))
+            return None
         return _
-
-    def help(self, cmd_name):
-        return (self.help_registry[cmd_name], self.usage_registry[cmd_name])
     
     @property
     def auto_suggest(self):

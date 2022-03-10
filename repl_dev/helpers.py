@@ -7,27 +7,15 @@ from .models import CommandModel
 from .prototyper import PrototypeCollector, Prototype
 from typing import Union
 import re, sys
+from pathlib import Path
 
 
 ## AUTO SUGGEST AND VALIDATE ?
 
 class CommandManager():
     def __init__(self):
-        #self._command_map = {}
-        #self._signatures = {
-        #    'help' : set()
-        #}
-
         self.prototyper = PrototypeCollector()
-    def __iter__(self):
-        for t in self._command_map.items():
-            yield t
-   
-    def __getitem__(self, cmd)->CommandModel:
-        if cmd in self._command_map:
-            return self._command_map[cmd]
-        raise KeyError(f"no command {cmd}")
-        
+  
     def assert_callable(self, f:callable):
         if not f.__name__ in self.available_commands:
             raise KeyError(f"{f.__name__} is not known")
@@ -43,6 +31,10 @@ class CommandManager():
         
         return True
 
+    def help(self, cmd_name):
+        _:Prototype = self.prototyper[cmd_name]
+        return _.input_str, _.comments
+
     @property
     def completer(self):# deprecated
         return  NestedCompleter.from_nested_dict({})#self._signatures)
@@ -51,9 +43,9 @@ class CommandManager():
     def available_commands(self):
         return self.prototyper.commands
 
-    def add(self, proto_string , target):
+    def add(self, proto_string , target, comments=None):
         print(f"Adding {proto_string} prototype",file=sys.stderr)
-        proto_obj:Prototype = self.prototyper.add(proto_string)
+        proto_obj:Prototype = self.prototyper.add(proto_string, comments)
 
 
         # Check arguments names consistency
@@ -62,10 +54,42 @@ class CommandManager():
         #self._signatures[symbol]  = signature
         #self._signatures["help"].add(symbol)
         
-
+    # DO we exectute it ?
     def signatureCheck(self,fn, fn_symbol, *args, **kwargs):
         
-        print(f"Checking signature of {fn_symbol}", file=sys.stderr)
+        # Check argument number
+        # Check individual type (including valid path) or allowed values
+        # What is fn
+
+        print(f"Checking signature of {fn_symbol} {fn.__name__}", file=sys.stderr)
+        fn_sig_types = self.prototyper.get_cmd_param_types(fn_symbol)
+        fn_sig_values = self.prototyper.get_cmd_param_values(fn_symbol)
+        fn_sig_arg_names = self.prototyper.get_cmd_param_names(fn_symbol)
+        print(f"=> {fn_sig_types}", file=sys.stderr)
+        print(f"=> {fn_sig_values}", file=sys.stderr)
+
+        # NO optional count for now
+        if fn_sig_types is None:
+            if len(args) > 0:
+                raise SignatureEmptyError(fn_symbol, args, fn_sig_arg_names)
+            return True
+
+        if len(args) != len(fn_sig_types):
+            raise SignatureLengthError(fn_symbol, args, fn_sig_arg_names)
+
+        for i, (sig_type, sig_value) in enumerate( zip(fn_sig_types, fn_sig_values) ):
+            callee_value = args[i]
+            for t in sig_type:
+                print(f"??{t}", file=sys.stderr)
+                if t == "keyword" and callee_value in sig_value:
+                    continue 
+                if t == "number" and  str(callee_value).isnumeric() :
+                    continue 
+                if t == "path" and  Path(callee_value).exists() :
+                    continue 
+                if t == "string":
+                    continue
+                raise SignatureArgumentTypeError(i, fn_symbol, args, fn_sig_types)
         return True
 
         cmd = fn_symbol
@@ -124,13 +148,34 @@ class customAutoSuggest(AutoSuggest):
         return Suggestion("")
 
 class SignatureBaseError(Exception):
-    def __init__(self, cmd, signatures):
+    def __init__(self, cmd, current, expected):
         self.cmd = cmd
-        self.availbleCmd = set(signatures.keys())
-        if cmd in self.availbleCmd:
-            self.subCmd = signatures[cmd] if type(signatures[cmd]) == set else set(signatures[cmd].keys())
+        self.call = current
+        self.expected = expected
         super().__init__()
+    def __str__(self):
+        return f"<ansired><u>{self.cmd}</u> not a valid argument {self.call}</ansired> <ansigreen><i>{self.expected}</i></ansigreen>"
+
+class SignatureLengthError(SignatureBaseError):
+    def __init__(self, *args):
+        super().__init__(*args)
+    def __str__(self):
+        return f"<ansired><u>{self.cmd}</u> unepxected number or arguments {self.call}</ansired> <ansigreen><i>{self.expected}</i></ansigreen>"
+
+class SignatureEmptyError(SignatureBaseError):
+    def __init__(self, *args):
+        super().__init__(*args)
+    def __str__(self):
+        return f"<ansired><u>{self.cmd}</u> Not emty arguments {self.call}</ansired> <ansigreen>{self.expected}</ansigreen>"
         
+
+class SignatureArgumentTypeError(SignatureBaseError):
+    def __init__(self, param_num,*args):
+        self.p_num = param_num
+        super().__init__(*args)
+    def __str__(self):
+        return f"<ansired><u>{self.cmd}</u> not a valid type at pos {self.p_num}: {self.call}</ansired> <ansigreen><i>{self.expected}</i></ansigreen>"
+
 class SignatureCallError(SignatureBaseError):
     def __init__(self, *kwargs):
         super().__init__(*kwargs)#self.message)
