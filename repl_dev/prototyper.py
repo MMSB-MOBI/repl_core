@@ -1,60 +1,11 @@
-import re, sys
+from ast import keyword
 from optparse import Option
-from pydantic import BaseModel, ValidationError, validator
-from typing import Callable, Union, List, Optional, Literal, Any
-from xmlrpc.client import Boolean
-ParamTypes = Literal["string", "number", "file", "keyword"]
+import re, sys
+from typing import List, Optional, Union
+from pydantic import BaseModel
+from .parameters import Parameter, parameter_parser, ParamValues, ParamTypes
 
-class Parameter(BaseModel):
-    name : str
-    types : Optional[ Union[ ParamTypes, List[ ParamTypes ] ] ]
-    values : Optional[ Union[ str, List[ str ] ] ]
-    
-    def parse_fields(self, fields:List[str]):        
-        self.parse_types(fields)
-        self.parse_default_values(fields)
-        
-    def parse_types(self, v:List[str]):
-        v_types = []
-        try:
-            _ = iter(v)
-        except TypeError as e:
-            v = [v]
-        for x in v:
-            t = None
-            if x.startswith('_'):
-                if not x[1:] in ["string", "number", "file"]:
-                    raise ValueError(f"{x[1:]} is not a valid type")
-                t =  x[1:]
-            else: # plain value assumed being keyword
-                t = "keyword"
-            v_types.append(t)
-            
-        #self.types = v_types if len(v_types) > 1 else v_types[0]
-        self.types = v_types
 
-    def parse_default_values(self, v):
-        v_values = []
-        try:
-            _ = iter(v)
-        except TypeError as e:
-            v = [v]
-        
-        v_values = [ None if x.startswith('_') else x for x in  v ]
-            
-        #self.values =  v_values if len(v_values) > 1 else v_values[0]
-        self.values =  v_values 
-
-def parameter_parser(input_field)->Optional[Parameter]:
-    if not ( input_field[0] == '{' and   input_field[-1] == '}'):
-        raise ValueError(f"malformed paramater input value {input_field}")
-    
-    _ = input_field[1:-1]
-    p_name, p_fields = _.split(':')    
-    p_field = p_fields.split('|')
-    pO = Parameter(name=p_name)
-    pO.parse_fields(p_field)
-    return pO
 
 class Prototype(BaseModel):
     input_str: str
@@ -66,20 +17,37 @@ class Prototype(BaseModel):
         if not self.parameters:
             self.parameters = []
         self.parameters.append(p)
-        
+
+    def set_defaults(self, defaults_values_tup):
+        if self.parameters is None:
+            if defaults_values_tup:
+                raise TypeError(f"Prototype {self.command} parameters array is None but default values are found: {defaults_values_tup}") 
+            return 
+        print(f"Prototype {self.command} parameters array:{self.parameters}\tdefault values {defaults_values_tup}",\
+            file=sys.stderr)
+        if defaults_values_tup is None:
+            return
+        assert len(defaults_values_tup) == len(self.parameters)
+
+        for p, _ in zip(self.parameters, defaults_values_tup):
+            print(f"Parameter obj value::{p}",file=sys.stderr)
+            if not "keyword" in p.types:
+                p.values = [_]
+    def __len__(self):
+        return len(self.parameters)
 
 def base_input_parser(istr):
     _ = re.search("^([\S]+)(.*)$", istr)
     if not _ :
         raise ValueError(f"No command found in {istr}")
-    if len(_.group())==2:
+    if len(_.group()) == 2:
         return (_[1], None)
     p = re.findall("(\{[\w_:|]+\})", _[2])
 
     return (_[1], p)
 
 # Prototype factory
-def parse(input_string, comments=None):
+def parse(input_string, comments=None, callable=None):
     cmd, maybe_args = base_input_parser(input_string)
     
     fn_proto = Prototype(command=cmd, input_str=input_string, comments=comments)
@@ -103,13 +71,41 @@ class PrototypeCollector():
 
         return  self._prototypes[cmd]
 
-    def add(self, input_string, comments=None)->Prototype:
+    def add(self, input_string, default_values, comments=None)->Prototype:
         new_proto = parse(input_string, comments=comments)
         if new_proto.command in self._prototypes:
             raise KeyError(f"prototype command {new_proto.command} alredy exists")
+        
+        new_proto.set_defaults(default_values)
+        print("added Prototype Object {new_proto}",file=sys.stderr)
+
         self._prototypes[new_proto.command] = new_proto
         return new_proto
     
+    def get_match_cmd(self, maybe_cmd:str):
+        print(f"Completing on input >{maybe_cmd}<", file=sys.stderr)      
+        if not maybe_cmd:
+            return []
+        return  [ _ for _ in self._prototypes if _.startswith(maybe_cmd) ]
+    
+    def get_cmd_default_values_at(self, cmd, narg)->Optional[ List[ParamValues] ]:
+        if cmd not in self._prototypes:
+            return None
+        proto:Prototype = self._prototypes[cmd]
+        if narg >= len(proto):
+            return None
+        p:Parameter = proto.parameters[narg]
+        return p.values
+
+    def get_cmd_param_types_at(self, cmd, narg)->Optional[ List[ParamTypes] ]:
+        if cmd not in self._prototypes:
+            return None
+        proto:Prototype = self._prototypes[cmd]
+        if narg >= len(proto):
+            return None
+        p:Parameter = proto.parameters[narg]
+        return p.types
+
     def isa(self, cmd):
         return str(cmd) in self._prototypes
 
@@ -117,7 +113,7 @@ class PrototypeCollector():
     def commands(self):
         return [ k for k in self._prototypes ]
     
-    def get_cmd_param_names(self, cmd_symbol)->Optional[List[str]]:
+    def get_cmd_all_param_names(self, cmd_symbol)->Optional[List[str]]:
         if not cmd_symbol in  self._prototypes:
             raise KeyError(f"no prototype found for command named {cmd_symbol}")
         proto:Prototype = self._prototypes[cmd_symbol]
@@ -126,7 +122,7 @@ class PrototypeCollector():
         
         return [ p.name for p in proto.parameters ]
 
-    def get_cmd_param_types(self, cmd_symbol)->Optional[List[str]]:
+    def get_cmd_all_param_types(self, cmd_symbol)->Optional[List[List[ParamTypes]]]:
         if not cmd_symbol in  self._prototypes:
             raise KeyError(f"no prototype found for command named {cmd_symbol}")
         proto:Prototype = self._prototypes[cmd_symbol]
@@ -135,7 +131,7 @@ class PrototypeCollector():
         print(f"##{proto.parameters}", file=sys.stderr)
         return [ p.types for p in proto.parameters ]
         
-    def get_cmd_param_values(self, cmd_symbol)->Optional[List[str]]:
+    def get_cmd_all_param_values(self, cmd_symbol)->Optional[List[List[ParamValues]]]:
         if not cmd_symbol in  self._prototypes:
             raise KeyError(f"no prototype found for command named {cmd_symbol}")
         proto:Prototype = self._prototypes[cmd_symbol]

@@ -5,12 +5,7 @@ from prompt_toolkit import print_formatted_text, HTML
 from .helpers import CommandManager, SignatureBaseError
 import sys
 
-from inspect import signature as fn_signature
-
 response = None
-
-from inspect import signature
-
 """
 signature = {
     "load" : {"fast", "slow"}
@@ -52,7 +47,7 @@ def _exit():
     #print_formatted_text(HTML(f"\n\n<skyblue></skyblue>"))
     exit(0)
 
-def _connection_test(host, port, route)->Boolean:
+def _connection_test(host="localhost", port=1234, route="/hello")->Boolean:
     url=f"{host}:{port}{route}"
     try :
         ans = get(f"http://{url}")
@@ -182,10 +177,10 @@ class Application():
     
     @property
     def auto_suggest(self):
-        return self.command_registry.get_customAutoSuggest()
+        return self.command_registry.suggester
 
     @property
-    def completer(self):
+    def auto_complete(self):
         return self.command_registry.completer
 """
 viewer decorator provides mutations on ressources

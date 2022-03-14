@@ -18,6 +18,27 @@ def hello(firstname):
     print("metier OUT")
 
 
+@app.viewer("/handshake",
+            "hello_sunshine {firstname:_string}",
+            help_msg="Say hello to anyone"
+            )
+def hello_sunshine(firstname="mr_who"):
+    print(f"Hello who ? {firstname}")
+    print(get_response().content)
+    print("metier OUT")
+
+
+@app.viewer("/handshake",
+            "hello_from_file {myfile:_path}",
+            help_msg="Say hello from file"
+            )
+def hello_from_file(myfile="/path/to/my/file"):
+    print(f"Hello who ? {myfile}")
+    print(get_response().content)
+    print("metier OUT")
+
+
+
 ## @app.mutator -> different decorator
 """
 @app.viewer("/put_stuff",

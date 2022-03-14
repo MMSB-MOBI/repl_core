@@ -1,8 +1,9 @@
 from inspect import signature
+import inspect
 from xmlrpc.client import Boolean
 from prompt_toolkit import print_formatted_text, HTML
-from prompt_toolkit.completion import NestedCompleter
-from prompt_toolkit.auto_suggest import AutoSuggest, Suggestion
+from .interactive_prompt import customCompleter, customAutoSuggest
+
 from .models import CommandModel
 from .prototyper import PrototypeCollector, Prototype
 from typing import Union
@@ -14,12 +15,14 @@ from pathlib import Path
 
 class CommandManager():
     def __init__(self):
-        self.prototyper = PrototypeCollector()
-  
+        self.prototyper  = PrototypeCollector()
+        self._completer  = customCompleter(self.prototyper)
+        self._suggester  = customAutoSuggest(self.prototyper)
+        
     def assert_callable(self, f:callable):
         if not f.__name__ in self.available_commands:
             raise KeyError(f"{f.__name__} is not known")
-        p_names = self.prototyper.get_cmd_param_names(f.__name__)
+        p_names = self.prototyper.get_cmd_all_param_names(f.__name__)
         c_params = list(signature(f).parameters)
         if not c_params and not p_names:
             return True
@@ -34,37 +37,23 @@ class CommandManager():
     def help(self, cmd_name):
         _:Prototype = self.prototyper[cmd_name]
         return _.input_str, _.comments
-
-    @property
-    def completer(self):# deprecated
-        return  NestedCompleter.from_nested_dict({})#self._signatures)
     
     @property
     def available_commands(self):
         return self.prototyper.commands
 
     def add(self, proto_string , target, comments=None):
-        print(f"Adding {proto_string} prototype",file=sys.stderr)
-        proto_obj:Prototype = self.prototyper.add(proto_string, comments)
-
-
-        # Check arguments names consistency
-
-        #self._command_map[symbol] = CommandModel(**kwargs)
-        #self._signatures[symbol]  = signature
-        #self._signatures["help"].add(symbol)
+        callable_arg_specs = inspect.getfullargspec(target)
+        print(f"Adding {proto_string} prototype callee is :\n {callable_arg_specs}",file=sys.stderr)
         
-    # DO we exectute it ?
+        proto_obj:Prototype = self.prototyper.add(proto_string, callable_arg_specs.defaults\
+                                                , comments)
+
     def signatureCheck(self,fn, fn_symbol, *args, **kwargs):
-        
-        # Check argument number
-        # Check individual type (including valid path) or allowed values
-        # What is fn
-
         print(f"Checking signature of {fn_symbol} {fn.__name__}", file=sys.stderr)
-        fn_sig_types = self.prototyper.get_cmd_param_types(fn_symbol)
-        fn_sig_values = self.prototyper.get_cmd_param_values(fn_symbol)
-        fn_sig_arg_names = self.prototyper.get_cmd_param_names(fn_symbol)
+        fn_sig_types = self.prototyper.get_cmd_all_param_types(fn_symbol)
+        fn_sig_values = self.prototyper.get_cmd_all_param_values(fn_symbol)
+        fn_sig_arg_names = self.prototyper.get_cmd_all_param_names(fn_symbol)
         print(f"=> {fn_sig_types}", file=sys.stderr)
         print(f"=> {fn_sig_values}", file=sys.stderr)
 
@@ -91,61 +80,15 @@ class CommandManager():
                     continue
                 raise SignatureArgumentTypeError(i, fn_symbol, args, fn_sig_types)
         return True
-
-        cmd = fn_symbol
-        err_egg = (cmd, self._signatures)
-        #cur_sig = self.completer
-   
-        if not cmd in self.available_commands:
-            raise SignatureCallError(*err_egg)
-        if self._signatures[cmd] is None:
-            return fn(*args, **kwargs)
-        availArg = set([ subCmd for subCmd in self._signatures[cmd] ])
-    
-        _ = set(args) - set(availArg)
-        if not args:
-            raise SignatureEmptySubCommandError(*err_egg)        
-        if _:
-            raise SignatureWrongSubCommandError(*err_egg, *_)        
-        return fn(*args, **kwargs)
        
-    def get_customAutoSuggest(self):
-        return customAutoSuggest(self)
+    @property
+    def suggester(self):
+        return self._suggester
+    
+    @property
+    def completer(self):
+        return self._completer
 
-class customAutoSuggest(AutoSuggest):
-    def __init__(self, bound_command_manager):
-        super().__init__()
-        self.command_manager = bound_command_manager
-
-    def update(self, cmd):
-        self.currentCommand = cmd
-
-    def get_suggestion(self, buffer, document):
-        """ Given the current first word on prompt
-            tries to find matching arguments
-        """
-        print("###", document.text, file = sys.stderr )
-        if re.match('^[\S]*$', document.text):
-            return Suggestion("")
-        
-        
-        curr_prompt_elem = re.findall('([\S]+)', document.text)
-       # print(f"# {len(curr_prompt_elem)} my i suggest ?\n")
-        try: 
-            data:Union[CommandModel, None] = self.command_manager[ curr_prompt_elem[0] ] ## MM
-            if len(curr_prompt_elem) == 1: # return basic suggestion
-                _ = " ".join( data.usage.split()[1:] )
-                return Suggestion(f" {_}")
-            # We are in arguments, here we check if a path is desirable
-            curr_arg_type_num = len(curr_prompt_elem) - 2
-            if data.paramTypes:
-                if data.paramTypes[curr_arg_type_num] == "path":
-                    return Suggestion( pathSuggest(curr_prompt_elem[-1]) )
-            
-        except KeyError as e:
-            print(f"{curr_prompt_elem[0]} not a valid key\n", file=sys.stderr) 
-            #return Suggestion("!!!")
-        return Suggestion("")
 
 class SignatureBaseError(Exception):
     def __init__(self, cmd, current, expected):

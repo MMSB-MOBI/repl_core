@@ -3,8 +3,6 @@ from prompt_toolkit.key_binding import KeyBindings
 import re
 
 from .application import Application
-from .helpers import customAutoSuggest
-
 
 def run(app:Application):
 
@@ -57,8 +55,8 @@ def run(app:Application):
     
     while True:
         answer = session.prompt(getPrompt(), 
-                                #completer=app.completer, 
-                                #auto_suggest=app.auto_suggest,
+                                completer=app.auto_complete, 
+                                auto_suggest=app.auto_suggest,
         key_bindings=kb )
         digest(answer)
         #print('You said: %s' % answer)
