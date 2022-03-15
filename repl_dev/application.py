@@ -1,6 +1,6 @@
-from typing import Callable, Optional, Tuple
+from typing import Callable, Optional, Tuple, Literal
 from xmlrpc.client import Boolean
-from requests import get
+from requests import get, post, Response
 from prompt_toolkit import print_formatted_text, HTML
 from .helpers import CommandManager, SignatureBaseError
 import sys
@@ -102,12 +102,11 @@ class Application():
 
     def isa(self, cmd):
         return cmd in self.available_commands
-
+    
     """
     viewer decorator provides view only on ressources
     GET
     POST?
-    We must validate kwargs
     """
     def viewer(self, ressource_path:str, prototype:str, help_msg:str):
         def inner_decorator(f):
@@ -115,18 +114,6 @@ class Application():
             self.command_registry.add(prototype, f, comments=help_msg)
             # Check decorated function matches prototype
             self.command_registry.assert_callable(f)
-
-            # Not Needed TO CHEK THOUGH
-            #if f.__name__ in self.viewer_map:
-            #    raise KeyError(f"{f.__name__} is already registred")
-            #self.command_registry.add(f.__name__, f)
-
-                                      
-            #self.help_registry[f.__name__] = help_msg
-        
-            # Checking arguments validity
-            
-            #sprint(f"viewer registred inspecti signature{fn_signature(f)}", file=sys.stderr)
 
             def wrapped(*args, **kwargs): 
                 global response ## expression parser
@@ -141,13 +128,50 @@ class Application():
             self.viewer_map[f.__name__] = wrapped
      
         return inner_decorator
-        
-    #def viewer_execute(self, v_cmd_symbol, *args, **kwargs):
-    #    print(f"FIRE!! {v_cmd_symbol}", file=sys.stderr)
-        # Get signature decorator
-    #    to_launch = self.command_registry.signatureCheck(self.viewer_map[v_cmd_symbol])
-    #    to_launch(*args, **kwargs)
 
+
+    RequestType=Literal['POST', 'GET']
+
+    def do_request(url, request_type, data,):
+        global response ## expression parser
+        response = get(url)
+        """
+    viewer decorator provides view only on ressources
+    GET
+    POST?
+    """
+    def answer_processor(answer:Response):
+        if answer.status_code != 200:
+            print_formatted_text(HTML(f"<ansired>A problem occured <i>{answer.status_code}</i></ansired>"))
+        try:
+            d = answer.json()
+            print_formatted_text(HTML(f"<ansigreen>Success<i>{d}</i></ansigreen>"))
+        except Exception as e:
+            print_formatted_text(HTML(f"<ansired>A problem occured <i>{e}</i></ansired>"))
+
+    def mutator(self, ressource_path:str, prototype:str, help_msg:str, method='POST', answer_processor=answer_processor):
+        def inner_decorator(f):
+            # Register prototype
+            self.command_registry.add(prototype, f, comments=help_msg)
+            # Check decorated function matches prototype
+            self.command_registry.assert_callable(f)
+            
+            def wrapped(*args, **kwargs):
+                # Check and cast *args
+                datum_to_post = f(*args, **kwargs)
+                url = f"http://{self.host}:{self.port}{ressource_path}"
+                if method == "POST":
+                    print(datum_to_post, file=sys.stderr)
+                    ans:Response = post(url, data = datum_to_post)
+                else: 
+                    raise TypeError("method ??")
+                answer_processor(ans)
+                return ans
+            self.viewer_map[f.__name__] = wrapped
+     
+        return inner_decorator
+    
+        
     @property
     def available_commands(self):
         return self.command_registry.available_commands

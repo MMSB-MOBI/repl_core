@@ -32,6 +32,7 @@ class customCompleter(Completer):
         """ Given the current first word on prompt
             tries to find matching arguments
         """
+        print(f"Calling complter on following line :: >{document.text}<",file=sys.stderr)
         curr_prompt_elem = re.findall('([\S]+)', document.text)
         # 1st filed aka command suggestion
         if re.match("^[\S]+$", document.text):   
@@ -46,8 +47,12 @@ class customCompleter(Completer):
 
             print(f"customCompleter::curr_last_field, offset, n_arg: ({curr_last_field}, {offset}, {n_arg})", file = sys.stderr)
             if curr_last_field:
+                print(f"CLF>{curr_last_field}<", file=sys.stderr)
                 _ = self.bound_prototyper.get_cmd_default_values_at(curr_prompt_elem[0], n_arg)
                 print(f"##DFV {_} (from : {curr_prompt_elem[0]}, {n_arg})", file=sys.stderr)
+                if _ is None:
+                    print(f"[ERROR-get_completion]Follwing prompt bug : >{document.text}<", file=sys.stderr)
+                    return
                 if len(_) > 1:
                     print("Autocompleting w/ mutliple keywords", _, file=sys.stderr)
                     for keyword in _:
@@ -73,6 +78,10 @@ class customAutoSuggest(AutoSuggest):
         print(f"customAutoSuggest::curr_last_field, offset, n_arg: ({curr_last_field}, {offset}, {n_arg})", file = sys.stderr)
         if curr_last_field:
             def_value = self.bound_prototyper.get_cmd_default_values_at(curr_prompt_elem[0], n_arg)
+            if def_value is None:
+                print(f"[ERROR-get_suggestion]Follwing prompt bug : >{document.text}<", file=sys.stderr)
+                return None
+        
             if len(def_value) > 1:
                 return None
             
@@ -84,8 +93,8 @@ class customAutoSuggest(AutoSuggest):
                     print(f"Autosuggesting file field w/ {curr_last_field}", file=sys.stderr)
                     return Suggestion(path_suggest(curr_last_field.strip()))
                 print("Autosuggesting ",def_value, file=sys.stderr)
-                if def_value[0].startswith(curr_last_field.strip()):
-                    return Suggestion(def_value[0][offset:])
+                if str(def_value[0]).startswith(curr_last_field.strip()):
+                    return Suggestion(str(def_value[0])[offset:])
                 return Suggestion("")
         
         return None

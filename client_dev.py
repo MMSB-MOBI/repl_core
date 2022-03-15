@@ -39,23 +39,13 @@ def hello_from_file(myfile="/path/to/my/file"):
 
 
 
-## @app.mutator -> different decorator
-"""
-@app.viewer("/put_stuff",
-            signature = None,
-            help="load a file of interest",
-            paramTypes=["path"],
-            usage = 'load yourFile'
+@app.mutator("/put_stuff",
+           "store {id:_number} {name:_string}",
+            help_msg="Store stuff"
             )
-def load():
-    print("LOAD metier IN")
-    print(get_response().content)
-    print("Load metierout")
-"""
-"""
-createCustomCompleter
+def store(id=6005, name="Tin_can"):
+    return {"id" : int(id), "name": name}
 
-"""
 
 """
 @app.viewer_as_proto("/load_with_param",
