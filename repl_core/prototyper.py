@@ -3,8 +3,8 @@ from optparse import Option
 import re, sys
 from typing import List, Optional, Union
 from pydantic import BaseModel
+from .errors import SignatureLengthError, SignatureOverrideError
 from .parameters import Parameter, parameter_parser, ParamValues, ParamTypes
-
 
 
 class Prototype(BaseModel):
@@ -27,12 +27,14 @@ class Prototype(BaseModel):
             file=sys.stderr)
         if defaults_values_tup is None:
             return
-        assert len(defaults_values_tup) == len(self.parameters)
+        if len(defaults_values_tup) != len(self.parameters):
+            raise SignatureLengthError(self.command, [ p.name for p in self.parameters ], defaults_values_tup)
 
         for p, _ in zip(self.parameters, defaults_values_tup):
             print(f"Parameter obj value::{p}",file=sys.stderr)
             if not "keyword" in p.types:
                 p.values = [_]
+        
     def __len__(self):
         return len(self.parameters)
 
@@ -74,7 +76,7 @@ class PrototypeCollector():
     def add(self, input_string, default_values, comments=None)->Prototype:
         new_proto = parse(input_string, comments=comments)
         if new_proto.command in self._prototypes:
-            raise KeyError(f"prototype command {new_proto.command} alredy exists")
+            raise SignatureOverrideError(new_proto.command, None,None)
         
         new_proto.set_defaults(default_values)
         print("added Prototype Object {new_proto}",file=sys.stderr)

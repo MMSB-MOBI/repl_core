@@ -1,9 +1,10 @@
-from typing import Callable, Optional, Tuple, Literal
+from typing import Callable, Optional, Tuple, Literal, Any
 from xmlrpc.client import Boolean
 from requests import get, post, Response
 from prompt_toolkit import print_formatted_text, HTML
-from .helpers import CommandManager, SignatureBaseError
-import sys
+from .errors import SignatureBaseError, SignatureArgumentNameError
+from .helpers import CommandManager
+import sys, re, inspect
 
 response = None
 """
@@ -13,6 +14,30 @@ signature = {
 
 >>context : load slow path [VALUE PARAMETER]
 """
+"""
+Coherce content of the return of a user mutator function into
+(data_to_post, Response_processor)
+"""
+def unwrap_data_callable_2uple(d:Any):
+    if type(d) == 'tuple' or type(d) == 'list':
+        if len(d) == 2:
+            if d[1] == 'callable':
+                return d
+    print("returning d, ans_proc", file=sys.stderr)
+    return (d, answer_processor)
+            
+    
+def answer_processor(answer:Response):
+    try:
+        #d = answer.json()
+        content = answer.content
+        if answer.status_code != 200:
+            print_formatted_text(HTML(f"<ansired>A problem occured <i>{answer.status_code}</i>\n\t{content}</ansired>"))
+        else :
+            print_formatted_text(HTML(f"<ansigreen>Success<i>{content}</i></ansigreen>"))
+    except Exception as e:
+        print_formatted_text(HTML(f"<ansired>A problem occured <i>{content}</i></ansired>"))
+
 
 
 def get_response():
@@ -103,6 +128,14 @@ class Application():
     def isa(self, cmd):
         return cmd in self.available_commands
     
+
+    def generate_url(self, f:Callable, url_ressource_specs:str, *args):
+        callable_arg_specs = inspect.getfullargspec(f)
+        for i_arg, arg_name in enumerate(callable_arg_specs.args):
+            value = args[i_arg]          
+            url_ressource_specs = url_ressource_specs.replace('{' + arg_name + '}', value)
+        url = f"http://{self.host}:{self.port}{url_ressource_specs}"       
+        return url
     """
     viewer decorator provides view only on ressources
     GET
@@ -110,67 +143,58 @@ class Application():
     """
     def viewer(self, ressource_path:str, prototype:str, help_msg:str):
         def inner_decorator(f):
-            # Register prototype
-            self.command_registry.add(prototype, f, comments=help_msg)
-            # Check decorated function matches prototype
-            self.command_registry.assert_callable(f)
+            self.assert_register(f, prototype, help_msg, ressource_path)
 
             def wrapped(*args, **kwargs): 
-                global response ## expression parser
-                url = f"http://{self.host}:{self.port}{ressource_path}"
+                global response
+                url = self.generate_url(f, ressource_path, *args)
                 response = get(url)
                 print(f"wrapped{url}", file=sys.stderr)             
-                ans = f(*args, **kwargs)
-                print('after function')
+                ans = f(*args, **kwargs)                
                 return ans
             print('decorating', f, 'with argument', ressource_path, file=sys.stderr)
         #return wrapped
-            self.viewer_map[f.__name__] = wrapped
-     
+            self.viewer_map[f.__name__] = wrapped           
         return inner_decorator
 
 
     RequestType=Literal['POST', 'GET']
 
-    def do_request(url, request_type, data,):
-        global response ## expression parser
-        response = get(url)
-        """
+    """
     viewer decorator provides view only on ressources
     GET
     POST?
     """
-    def answer_processor(answer:Response):
-        if answer.status_code != 200:
-            print_formatted_text(HTML(f"<ansired>A problem occured <i>{answer.status_code}</i></ansired>"))
-        try:
-            d = answer.json()
-            print_formatted_text(HTML(f"<ansigreen>Success<i>{d}</i></ansigreen>"))
-        except Exception as e:
-            print_formatted_text(HTML(f"<ansired>A problem occured <i>{e}</i></ansired>"))
-
-    def mutator(self, ressource_path:str, prototype:str, help_msg:str, method='POST', answer_processor=answer_processor):
+    def mutator(self, ressource_path:str, prototype:str, help_msg:str, method='POST'):
         def inner_decorator(f):
             # Register prototype
-            self.command_registry.add(prototype, f, comments=help_msg)
-            # Check decorated function matches prototype
-            self.command_registry.assert_callable(f)
+            self.assert_register(f, prototype, help_msg, ressource_path)
             
             def wrapped(*args, **kwargs):
                 # Check and cast *args
-                datum_to_post = f(*args, **kwargs)
-                url = f"http://{self.host}:{self.port}{ressource_path}"
+                
+                datum_to_post, ans_processor =  unwrap_data_callable_2uple(
+                                                    f(*args, **kwargs)
+                                                )
+                url = self.generate_url(f, ressource_path, *args)
                 if method == "POST":
                     print(datum_to_post, file=sys.stderr)
-                    ans:Response = post(url, data = datum_to_post)
+                    ans:Response = post(url, json = datum_to_post)
                 else: 
                     raise TypeError("method ??")
-                answer_processor(ans)
-                return ans
+                return ans_processor(ans)
             self.viewer_map[f.__name__] = wrapped
      
         return inner_decorator
-    
+
+    def assert_register(self, f, prototype, help_msg, ressource_path):
+        try:
+            self.command_registry.add(prototype, f, comments=help_msg)
+            # Check decorated function matches prototype
+            self.command_registry.assert_callable(f, ressource_path)
+        except SignatureBaseError as e:
+            print_formatted_text( HTML(f"<ansired> STARTUP ERROR:\t{str(e)}</ansired>\n") )
+            exit()
         
     @property
     def available_commands(self):
@@ -189,12 +213,10 @@ class Application():
         print(f"launch!! {cmd_name}", file=sys.stderr)
 
         try :
-        #    if cmd_name in self.viewer_map:
             fn = self.get_f_by_symbol(cmd_name)
-            self.command_registry.signatureCheck(fn, cmd_name, *args, **kwargs)
-            _ = fn(*args, **kwargs)
+            _args = self.command_registry.signature_check_and_arg_coherce(fn, cmd_name, *args, **kwargs)    
+            _ = fn(*_args, **kwargs)
         except SignatureBaseError as e:
-            print(str(e), file=sys.stderr)
             print_formatted_text(HTML(str(e)))
             return None
         return _

@@ -5,19 +5,17 @@ from typing import Optional
 
 app = FastAPI()
 
-
 @app.get("/handshake")
 def check_conn():
     return "pong"
 
 @app.get("/hello")
-def check_conn():
+def hello():
     return "bonjour"
 
-@app.get("/items/{item_id}")
-def read_item(item_id: int, q: Optional[str] = None):
-    return {"item_id": item_id, "q": q}
-
+@app.get("/greetings/{firstname}/{lastname}")
+def read_item(firstname: str, lastname:str):
+    return f"Hello to you {firstname} -- {lastname}"
 
 class Stuff(BaseModel):
     id : int
