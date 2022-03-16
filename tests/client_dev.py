@@ -11,6 +11,7 @@ app = Application(port=8000, route="/handshake", auto_connect=True)
 
 """
 Declare a function that maps to a simple endpoint
+The REPL function itself accept one of the two keywords
 """
 @app.viewer("/handshake",
             "hello {firstname:pierre|paul}",
@@ -22,6 +23,7 @@ def hello(firstname):
 
 """
 Declare a function that maps to a endpoint with parameters
+The REPL function itself accept any two strings
 """
 @app.viewer("/greetings/{firstname}/{lastname}",
             "hello_anyone {firstname:_string} {lastname:_string}",
