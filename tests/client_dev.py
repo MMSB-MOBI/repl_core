@@ -79,11 +79,11 @@ def store_and_process(id=6005, name="Tin_can"):
                 "store_long {id:_number} {name:_string}",
                 help_msg="Store stuff for a long time",
                 method='POST',
-                delay = 10,
+                #delay = 10,
                 total=1000)
 def store_long(id=10001, name="clean_my_room"):
     def is_it_tidy(packet:Response):
-        print(packet.content)
+        #print(packet.content)
         data = packet.json()
         return int(data["status"]), \
                int(data["max_val"]),\

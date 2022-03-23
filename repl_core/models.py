@@ -18,7 +18,6 @@ def validate_update_packet(f_name, *args):
     if len(args) != 3:
         raise UpdateTupleLengthError(f_name, *args)
 
-    print(args)
     if not isinstance(args[0], int):
         raise UpdateTupleTypeError(0, f_name, *args)
 

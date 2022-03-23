@@ -48,7 +48,7 @@ def be_busy(item_id):
     for i in range(SLEEP_MAX):
         sleep(1)
         print(f"Changing {item_id} from {STORE[item_id]} to { STORE[item_id] - 1}")
-        STORE[item_id] = STORE[item_id] - 1
+        STORE[item_id] = STORE[item_id] + 1
 
 STORE = {}
 
@@ -56,7 +56,7 @@ STORE = {}
 async def store_item(item_id): 
    
     if not item_id in STORE:
-        STORE[ item_id ] = SLEEP_MAX
+        STORE[ item_id ] = 0
         loop = asyncio.get_event_loop()
         #with concurrent.futures.ProcessPoolExecutor() as pool:
         #    loop.run_in_executor(pool, functools.partial(be_busy, item_id))  # wait result
@@ -68,7 +68,7 @@ async def store_item(item_id):
 async def store_item_too(crate:Stuff): 
    
     if not crate.name in STORE:
-        STORE[ crate.name ] = SLEEP_MAX
+        STORE[ crate.name ] = 0
         loop = asyncio.get_event_loop()
         #with concurrent.futures.ProcessPoolExecutor() as pool:
         #    loop.run_in_executor(pool, functools.partial(be_busy, item_id))  # wait result

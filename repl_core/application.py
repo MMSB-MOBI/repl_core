@@ -198,7 +198,7 @@ class Application():
         return inner_decorator
 
     def long_pool(self, ressource_path:str, prototype:str, help_msg:str, 
-                        method='POST', delay=10, total=100):
+                        method='POST', delay=0.5, total=100):
 
         def inner_decorator(f):
             # Register prototype
@@ -209,29 +209,36 @@ class Application():
                 datum_to_post, ans_processor =  unwrap_data_callable_2uple(
                                                 f(*args, **kwargs)
                                                 )
-                print(datum_to_post, ans_processor)
+                print(datum_to_post, ans_processor, file=sys.stderr)
                 def pool():
-                    print(datum_to_post)
+                    print(datum_to_post, file=sys.stderr)
                     url = self.generate_url(f, ressource_path, *args)
                     ans:Response = post(url, json = datum_to_post)
                     _ = ans_processor(ans)
-                    curr, max_val, is_done = validate_update_packet(f.__name__, *_)
+                    curr, max_val, is_done = validate_update_packet(f.__name__, *_)                   
                     return curr, max_val, is_done 
                 
-          
                 try:
                     curr, max_val, is_done = pool()
-                    total = int(total) if max_val is None else int(max_val)
-               
-                    def updater():
-                        is_done = False
-                        while is_done:
-                            curr, max_val, is_done = pool()                       
-                            yield curr
-                            
+                    print(curr, max_val, is_done, " <== initial pool", file=sys.stderr)
+                    if is_done:
+                        ## Display success
+                        return True
 
-                    for i in ProgressBar( updater , total=int(total) ):
-                        time.sleep(float(delay))
+                    total = int(total) if max_val is None else int(max_val)                    
+                    def updater():
+                        pb_count = 0
+                        is_done = False
+                        while not is_done:
+                            curr, max_val, is_done = pool()     
+                            print("#update iter", curr, max_val, is_done, "#", file=sys.stderr)
+                            while pb_count < curr:
+                                pb_count += 1               
+                                yield curr
+                        
+                    with ProgressBar() as pb:                                            
+                        for i in pb( updater() , total=int(total) ):
+                            time.sleep(float(delay))
                     return True
                 except UpdateBaseError as e:
                     print_formatted_text(str(e))
