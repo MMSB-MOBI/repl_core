@@ -1,6 +1,7 @@
 from prompt_toolkit import PromptSession, print_formatted_text, HTML
 from prompt_toolkit.key_binding import KeyBindings
 import re
+from requests import Response # to be exported
 
 from .application import Application
 

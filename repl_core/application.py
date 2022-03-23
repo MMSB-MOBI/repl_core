@@ -1,10 +1,16 @@
+import imp
+from operator import is_
 from typing import Callable, Optional, Tuple, Literal, Any
 from xmlrpc.client import Boolean
 from requests import get, post, Response
 from prompt_toolkit import print_formatted_text, HTML
-from .errors import SignatureBaseError, SignatureArgumentNameError
+from prompt_toolkit.shortcuts import ProgressBar
+from .errors import SignatureBaseError, UpdateBaseError
 from .helpers import CommandManager
 import sys, re, inspect
+import time
+
+from .models import validate_update_packet
 
 response = None
 """
@@ -18,12 +24,15 @@ signature = {
 Coherce content of the return of a user mutator function into
 (data_to_post, Response_processor)
 """
-def unwrap_data_callable_2uple(d:Any):
-    if type(d) == 'tuple' or type(d) == 'list':
+def unwrap_data_callable_2uple(d:Any)->Tuple[dict, Callable]:
+    if type(d) is tuple or type(d) is list:
+        print(f"d looks like : {d}", file=sys.stderr)
         if len(d) == 2:
-            if d[1] == 'callable':
+            print(f"d[1] type is : {type(d[1])}", file=sys.stderr)
+            if callable(d[1]): # Here
                 return d
-    print("returning d, ans_proc", file=sys.stderr)
+    print(f"returning d, ans_proc from a {type(d)}", file=sys.stderr)
+    print(f"{(d, answer_processor)}", file=sys.stderr)
     return (d, answer_processor)
             
     
@@ -107,6 +116,7 @@ class Application():
         self.handshake_route  = route
         self.viewer_map = {}
         self.default_map = {}
+        self.long_pool_map = {}
         self.command_registry = CommandManager()
         self.help_is_ready = False
         self.is_connected = False
@@ -133,7 +143,7 @@ class Application():
         callable_arg_specs = inspect.getfullargspec(f)
         for i_arg, arg_name in enumerate(callable_arg_specs.args):
             value = args[i_arg]          
-            url_ressource_specs = url_ressource_specs.replace('{' + arg_name + '}', value)
+            url_ressource_specs = url_ressource_specs.replace('{' + str(arg_name) + '}', str(value) )
         url = f"http://{self.host}:{self.port}{url_ressource_specs}"       
         return url
     """
@@ -178,12 +188,56 @@ class Application():
                                                 )
                 url = self.generate_url(f, ressource_path, *args)
                 if method == "POST":
-                    print(datum_to_post, file=sys.stderr)
+                    print(f"About to json in request his:{datum_to_post}", file=sys.stderr)
                     ans:Response = post(url, json = datum_to_post)
                 else: 
                     raise TypeError("method ??")
                 return ans_processor(ans)
             self.viewer_map[f.__name__] = wrapped
+     
+        return inner_decorator
+
+    def long_pool(self, ressource_path:str, prototype:str, help_msg:str, 
+                        method='POST', delay=10, total=100):
+
+        def inner_decorator(f):
+            # Register prototype
+            self.assert_register(f, prototype, help_msg, ressource_path)            
+            
+            def wrapped(*args, **kwargs):
+
+                datum_to_post, ans_processor =  unwrap_data_callable_2uple(
+                                                f(*args, **kwargs)
+                                                )
+                print(datum_to_post, ans_processor)
+                def pool():
+                    print(datum_to_post)
+                    url = self.generate_url(f, ressource_path, *args)
+                    ans:Response = post(url, json = datum_to_post)
+                    _ = ans_processor(ans)
+                    curr, max_val, is_done = validate_update_packet(f.__name__, *_)
+                    return curr, max_val, is_done 
+                
+          
+                try:
+                    curr, max_val, is_done = pool()
+                    total = int(total) if max_val is None else int(max_val)
+               
+                    def updater():
+                        is_done = False
+                        while is_done:
+                            curr, max_val, is_done = pool()                       
+                            yield curr
+                            
+
+                    for i in ProgressBar( updater , total=int(total) ):
+                        time.sleep(float(delay))
+                    return True
+                except UpdateBaseError as e:
+                    print_formatted_text(str(e))
+                    return False
+
+            self.long_pool_map[f.__name__] = wrapped
      
         return inner_decorator
 
@@ -205,6 +259,8 @@ class Application():
             return self.viewer_map[sym]
         if sym in self.default_map:
             return self.default_map[sym]
+        if sym in self.long_pool_map:
+            return self.long_pool_map[sym]
         print(f"no callable named!! {sym}", file=sys.stderr)
         return None
 
