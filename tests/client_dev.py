@@ -92,4 +92,19 @@ def store_long(id=10001, name="clean_my_room"):
     init_packet = {"id" : id, "name": name}
     return init_packet, is_it_tidy
 
+
+@app.bulk( "/put_many_stuff",
+            "put_many {total:_number} {name_seed:_string}",
+            help_msg="Store Many stuff by slices",
+            method='POST',
+            size=100)
+def put_many(total=1000, name_seed="item_number_"):
+    def format_bulk_items_before_upload(_slice):
+        return _slice
+               
+    big_iterable_data_set_put = [ { "id" : i, "name" : "f{name_seed}_{i}"} for i in range(total) ]
+
+    return big_iterable_data_set_put, format_bulk_items_before_upload
+
+
 run(app)

@@ -5,7 +5,7 @@ from xmlrpc.client import Boolean
 from requests import get, post, Response
 from prompt_toolkit import print_formatted_text, HTML
 from prompt_toolkit.shortcuts import ProgressBar
-from .errors import SignatureBaseError, UpdateBaseError
+from .errors import SignatureBaseError, UpdateBaseError, BulkUpdateError
 from .helpers import CommandManager
 import sys, re, inspect
 import time
@@ -34,8 +34,28 @@ def unwrap_data_callable_2uple(d:Any)->Tuple[dict, Callable]:
     print(f"returning d, ans_proc from a {type(d)}", file=sys.stderr)
     print(f"{(d, answer_processor)}", file=sys.stderr)
     return (d, answer_processor)
-            
+
+def assert_iterable(d):
+    try :
+        for i in d:
+            pass
+    except Exception as e:
+        raise TypeError(f"{d} is not iterable")
+    return True
+
+def unwrap_iter_callable_2uple(d:Any)->Tuple[Any, Callable]:
+    if not (type(d) is tuple or type(d) is list):       
+        assert_iterable(d)
+        return (d, packet_formatter)
     
+    if not callable(d[1]):
+        raise TypeError("Second value is not callable")
+
+    return d[:2]
+
+def packet_formatter(data): 
+    return data
+
 def answer_processor(answer:Response):
     try:
         #d = answer.json()
@@ -196,6 +216,56 @@ class Application():
             self.viewer_map[f.__name__] = wrapped
      
         return inner_decorator
+        
+    def bulk(self, ressource_path:str, prototype:str, help_msg:str, 
+                        method='POST', size= 50, prefix="data" # or we could use pkt formater
+    ):
+        def inner_decorator(f):
+            self.assert_register(f, prototype, help_msg, ressource_path)
+            def wrapped(*args, **kwargs):
+                url = self.generate_url(f, ressource_path, *args)
+
+                iterable, pktfmtr =  unwrap_iter_callable_2uple(
+                                        f(*args, **kwargs)
+                                                )     
+                              
+                try :
+                    _ = len(iterable)
+                    _len = _
+                except Exception:
+                    _len = -1
+
+                def updater(iterable, pktfmtr):
+                    buffer = []
+                    for icnt, datum in enumerate(iterable):
+                        buffer.append(datum)
+                        if (icnt+1) % size == 0:
+                            # packet = packet_formatter(buffer)
+                            d = { prefix : buffer }
+                            ans:Response = post(url, json = d )
+                            if ans.status_code != 200:
+                                raise BulkUpdateError(f"Following bulk packet returned code {ans.status_code}:\n{ d }")
+                            buffer = []
+                            for _ in range(size):
+                            #    print(f"y{icnt+1 - (size - (_ + 1))}", file=sys.stderr)
+                                yield icnt+1 - (size - (_ + 1))
+                    if buffer:
+                        d = { prefix : buffer }
+                        ans:Response = post(url, json = d )
+                        if ans.status_code != 200:
+                            raise BulkUpdateError(f"Following bulk packet returned code {ans.status_code}:\n{ d }")
+                        for _ in range(len(buffer)):
+                           # print(f"y{ icnt+1 - (len(buffer) - (_ + 1))}", file=sys.stderr)
+                            yield icnt+1 - (len(buffer) - (_ + 1))
+                        
+
+                with ProgressBar() as pb:                                            
+                    for i in pb( updater(iterable, pktfmtr) , total=int(_len) ):
+                        #time.sleep(float(0.01))
+                        pass
+                return True
+            self.long_pool_map[f.__name__] = wrapped
+        return inner_decorator
 
     def long_pool(self, ressource_path:str, prototype:str, help_msg:str, 
                         method='POST', delay=0.5, total=100):
@@ -282,6 +352,9 @@ class Application():
         except SignatureBaseError as e:
             print_formatted_text(HTML(str(e)))
             return None
+        except Exception as e:
+            print_formatted_text(HTML(f"<ansired>{str(e)}</ansired>"))
+            return None
         return _
     
     @property
@@ -291,6 +364,8 @@ class Application():
     @property
     def auto_complete(self):
         return self.command_registry.completer
+
+
 """
 viewer decorator provides mutations on ressources
 GET

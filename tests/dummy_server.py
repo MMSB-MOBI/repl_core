@@ -5,7 +5,7 @@ import concurrent
 import functools
 
 
-from typing import Optional
+from typing import Optional, List
 from time import sleep
 from threading import Thread
 
@@ -27,12 +27,18 @@ class Stuff(BaseModel):
     id : int
     name : str
 
+class BunchOfStuff(BaseModel):
+    data : List[Stuff]
+
 @app.post("/put_stuff")
 def read_item(crate:Stuff):
     return {"status": "SUCCESS", "data":crate}
 
 
-
+@app.post("/put_many_stuff")
+def read_item(crate_batch:BunchOfStuff):
+    sleep(1)
+    return {"status": "SUCCESS", "input":crate_batch}
 
 
 ##https://stackoverflow.com/questions/63169865/how-to-do-multiprocessing-in-fastapi
