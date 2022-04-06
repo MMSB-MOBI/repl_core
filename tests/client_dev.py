@@ -1,7 +1,7 @@
 from repl_core.application import get_response, Application
 from repl_core import run, Response
 from repl_core import print_formatted_text, HTML
-
+from typing import List, Any
 import sys
 
 app = Application(port=8000, route="/handshake", auto_connect=True)
@@ -101,10 +101,12 @@ def store_long(id=10001, name="clean_my_room"):
 def put_many(total=1000, name_seed="item_number_"):
     def format_bulk_items_before_upload(_slice):
         return _slice
+    def format_bulk_reponse_by_chunks(answer:Response, message_stack:List[Any]):
+        return message_stack.append(answer.content)
                
     big_iterable_data_set_put = [ { "id" : i, "name" : "f{name_seed}_{i}"} for i in range(total) ]
 
-    return big_iterable_data_set_put, format_bulk_items_before_upload
+    return big_iterable_data_set_put, format_bulk_items_before_upload, format_bulk_reponse_by_chunks
 
 
 run(app)

@@ -20,6 +20,35 @@ signature = {
 
 >>context : load slow path [VALUE PARAMETER]
 """
+def unwrap_maybe_to_json(f):
+    def decorated(*args, **kwargs):
+        ans:Response = f(*args, **kwargs)
+        print(f"Bop {ans.content}", file=sys.stderr)
+        try :
+            _ = ans.json()
+        except Exception as e:
+            _ = ans.text
+        print(f"Bip {_}", file=sys.stderr)
+        return _
+    return decorated
+
+
+    
+@unwrap_maybe_to_json
+def chunk_process(url, data, prefix):
+    d = { prefix : data }
+    ans:Response = post(url, json = d )
+    print("Inside", ans.content, file=sys.stderr)
+    if ans.status_code != 200:
+        #if ans.status_code > 299 and ans.status_code < 400:
+        #    print("300ish", ans.status_code, file=sys.stderr)
+        #    return ans
+        #else:
+        raise BulkUpdateError(f"Following bulk packet returned code {ans.status_code}:\n{ d }")
+   
+    return ans
+    
+
 """
 Coherce content of the return of a user mutator function into
 (data_to_post, Response_processor)
@@ -43,15 +72,15 @@ def assert_iterable(d):
         raise TypeError(f"{d} is not iterable")
     return True
 
-def unwrap_iter_callable_2uple(d:Any)->Tuple[Any, Callable]:
+def unwrap_iter_callable_3uple(d:Any)->Tuple[Any, Callable, Callable]:
     if not (type(d) is tuple or type(d) is list):       
         assert_iterable(d)
         return (d, packet_formatter)
     
-    if not callable(d[1]):
-        raise TypeError("Second value is not callable")
+    if not callable(d[1]) or not callable(d[2]):
+        raise TypeError("Second or third value is not callable")
 
-    return d[:2]
+    return d[:3]
 
 def packet_formatter(data): 
     return data
@@ -218,52 +247,52 @@ class Application():
         return inner_decorator
         
     def bulk(self, ressource_path:str, prototype:str, help_msg:str, 
-                        method='POST', size= 50, prefix="data" # or we could use pkt formater
+                        method='POST', size= 50, prefix="data",
+                        validator = lambda x: True # or we could use pkt formater
     ):
         def inner_decorator(f):
             self.assert_register(f, prototype, help_msg, ressource_path)
             def wrapped(*args, **kwargs):
                 url = self.generate_url(f, ressource_path, *args)
 
-                iterable, pktfmtr =  unwrap_iter_callable_2uple(
-                                        f(*args, **kwargs)
-                                                )     
-                              
+                
+                #iterable, pktfmtr, ans_processor =  unwrap_iter_callable_3uple(
+                #                        f(*args, **kwargs)
+                #                                )     
+
+                iterable = f(*args, **kwargs) 
                 try :
                     _ = len(iterable)
                     _len = _
                 except Exception:
                     _len = -1
 
-                def updater(iterable, pktfmtr):
+                chunks_msg = []
+                def updater(iterable):
                     buffer = []
                     for icnt, datum in enumerate(iterable):
                         buffer.append(datum)
                         if (icnt+1) % size == 0:
-                            # packet = packet_formatter(buffer)
-                            d = { prefix : buffer }
-                            ans:Response = post(url, json = d )
-                            if ans.status_code != 200:
-                                raise BulkUpdateError(f"Following bulk packet returned code {ans.status_code}:\n{ d }")
+                            _ = chunk_process(url, buffer, prefix)
+                            chunks_msg.append(_) #+= be better
                             buffer = []
                             for _ in range(size):
-                            #    print(f"y{icnt+1 - (size - (_ + 1))}", file=sys.stderr)
                                 yield icnt+1 - (size - (_ + 1))
                     if buffer:
-                        d = { prefix : buffer }
-                        ans:Response = post(url, json = d )
-                        if ans.status_code != 200:
-                            raise BulkUpdateError(f"Following bulk packet returned code {ans.status_code}:\n{ d }")
+                        _ = chunk_process(url, buffer, prefix)
+                        chunks_msg.append(_) #+= be betters
                         for _ in range(len(buffer)):
                            # print(f"y{ icnt+1 - (len(buffer) - (_ + 1))}", file=sys.stderr)
                             yield icnt+1 - (len(buffer) - (_ + 1))
                         
 
                 with ProgressBar() as pb:                                            
-                    for i in pb( updater(iterable, pktfmtr) , total=int(_len) ):
+                    for i in pb( updater(iterable) , total=int(_len) ):
                         #time.sleep(float(0.01))
                         pass
-                return True
+
+                return validator(chunks_msg)
+
             self.long_pool_map[f.__name__] = wrapped
         return inner_decorator
 
