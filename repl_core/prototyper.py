@@ -36,6 +36,8 @@ class Prototype(BaseModel):
                 p.values = [_]
         
     def __len__(self):
+        if self.parameters is None:
+            return 0
         return len(self.parameters)
 
 def base_input_parser(istr):
